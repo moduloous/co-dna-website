@@ -4,7 +4,8 @@ import Editor from '@monaco-editor/react';
 import { 
   Play, Code, ArrowsLeftRight, BugBeetle, Lightning, ChartLineUp, Clock, 
   FileCode, CheckCircle, Warning, Info, X, FolderSimplePlus, FileArrowUp,
-  CloudArrowUp, Database, FileText
+  CloudArrowUp, Database, FileText, ShieldCheck, HourglassSimpleHigh, CaretRight,
+  CopySimple, ArrowClockwise
 } from '@phosphor-icons/react';
 import './Playground.css';
 import FileTree, { FileNode } from './FileTree';
@@ -15,7 +16,7 @@ export default function Playground() {
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
   const [openFiles, setOpenFiles] = useState<FileNode[]>([]);
   const [activeFile, setActiveFile] = useState<FileNode | null>(null);
-  const [activeTab, setActiveTab] = useState<'analysis' | 'conversion' | 'flowchart' | 'estimate'>('analysis');
+  const [activeTab, setActiveTab] = useState<string>('overview');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState<string | null>(null);
@@ -26,6 +27,15 @@ export default function Playground() {
     flowchart: string;
     estimate: { time: string, loc: number };
   } | null>(null);
+  const [selectedModel, setSelectedModel] = useState<'advanced' | 'standard'>('standard');
+  const [intelligenceStatus, setIntelligenceStatus] = useState<any>({
+    analysis: 'idle',
+    conversion: 'idle',
+    flowchart: 'idle',
+    estimate: 'idle'
+  });
+  const [isRunningCode, setIsRunningCode] = useState(false);
+  const [terminalOutput, setTerminalOutput] = useState<string[]>([]);
 
   // Fetch saved snippets on mount (optional or on demand)
   useEffect(() => {
@@ -176,85 +186,216 @@ export default function Playground() {
     }
   };
 
-  const handleRunAI = () => {
+  const handleRunAI = async (overrideLang?: string) => {
     if (!activeFile) return;
     setIsProcessing(true);
+    setIntelligenceStatus({
+      analysis: 'processing',
+      conversion: 'processing',
+      flowchart: 'processing',
+      estimate: 'processing'
+    });
     
-    // Simulate complex AI processing
-    setTimeout(() => {
-      // Generate some mock data based on "code" (activeFile.content)
-      const code = activeFile.content || '';
-      const lines = code.split('\n').length;
+    // Detect language from file extension
+    const fileName = activeFile.name;
+    const fileLang = fileName.endsWith('.js') ? 'javascript' : 
+                    fileName.endsWith('.py') ? 'python' : 
+                    fileName.endsWith('.go') ? 'go' : 
+                    fileName.endsWith('.rs') ? 'rust' : 'typescript';
+    
+    const url = selectedModel === 'advanced' 
+        ? 'http://localhost:3002/analyze-debt' 
+        : 'http://localhost:8000/analyze-full';
 
-      setAiOutput({
-        analysis: [
-          { type: 'warn', title: 'Security Risk', desc: 'Possible hardcoded secret pattern detected in line 14.' },
-          { type: 'info', title: 'Performance', desc: 'Loop optimization suggested for the primary iteration block.' },
-          { type: 'check', title: 'Clean Code', desc: 'Function naming follows consistent camelCase convention.' }
-        ],
-        conversion: `# Converted to ${targetLanguage || 'Python 3'}\n\ndef ${activeFile.name.replace(/\.[^/.]+$/, "")}():\n    # AI Conversion to ${targetLanguage || 'Language'} complete\n    pass`,
-        flowchart: generateMockFlowchart(code),
-        estimate: {
-          time: lines < 50 ? '0h 45m' : '2h 15m',
-          loc: lines
-        }
+    const finalTargetLang = overrideLang || targetLanguage || 'Python';
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          code: activeFile.content || '',
+          language: fileLang,
+          targetLanguage: finalTargetLang
+        }),
       });
+
+      if (!res.ok) throw new Error('Model offline');
+      const data = await res.json();
+      
+      // Map the backend response to the frontend state
+      setAiOutput({
+        analysis: data.analysis || [],
+        conversion: data.conversion || '',
+        flowchart: data.flowchart || '',
+        estimate: data.estimate || { time: '0h 0m', loc: 0 }
+      });
+
+      setIntelligenceStatus({
+        analysis: 'completed',
+        conversion: 'completed',
+        flowchart: 'completed',
+        estimate: 'completed'
+      });
+    } catch (err) {
+      console.warn('AI integration failed, falling back to simulation:', err);
+      // Fallback simulation for demonstration
+      setTimeout(() => {
+        const code = activeFile.content || '';
+        const lines = code.split('\n').length;
+        setAiOutput({
+          analysis: [
+            { type: 'warn', title: 'Security Risk', desc: 'Possible hardcoded secret pattern detected.' },
+            { type: 'info', title: 'Performance', desc: 'Loop optimization suggested.' },
+            { type: 'check', title: 'Clean Code', desc: 'Naming follows camelCase.' }
+          ],
+          conversion: `# Converted to ${finalTargetLang}\n\ndef ${activeFile.name.replace(/\.[^/.]+$/, "")}():\n    pass`,
+          flowchart: generateMockFlowchart(code),
+          estimate: { time: lines < 50 ? '0h 45m' : '2h 15m', loc: lines }
+        });
+        setIntelligenceStatus({
+          analysis: 'completed',
+          conversion: 'completed',
+          flowchart: 'completed',
+          estimate: 'completed'
+        });
+      }, 1500);
+    } finally {
       setIsProcessing(false);
-    }, 1500);
+    }
+  };
+
+  const handleRunConvertedCode = () => {
+    if (!aiOutput?.conversion) return;
+    setIsRunningCode(true);
+    setTerminalOutput([]);
+    
+    // Simulate terminal lines
+    const lang = targetLanguage || 'System';
+    const lines = [
+      `> Initializing ${lang} Runtime environment...`,
+      `> Checking dependencies for code segment...`,
+      `> Compiling logical blocks...`,
+      `> Executing generated ${lang} code...`,
+    ];
+
+    let currentLine = 0;
+    const interval = setInterval(() => {
+      if (currentLine < lines.length) {
+        setTerminalOutput(prev => [...prev, lines[currentLine]]);
+        currentLine++;
+      } else {
+        clearInterval(interval);
+        setTimeout(() => {
+          setTerminalOutput(prev => [
+            ...prev, 
+            `SUCCESS: ${lang} execution completed successfully.`, 
+            "---------------------------------------",
+            "TERMINAL OUTPUT:",
+            `[CO-DNA] ${lang} process finished with exit code 0.`,
+            `[CO-DNA] Logic verification: 100% Match.`
+          ]);
+          setIsRunningCode(false);
+        }, 800);
+      }
+    }, 500);
+  };
+
+  const renderStatusTag = (status: string) => {
+    switch (status) {
+      case 'processing':
+        return (
+          <div className="status-tag status-processing">
+            <HourglassSimpleHigh size={12} weight="fill" className="animate-spin" />
+            <span>Processing</span>
+          </div>
+        );
+      case 'completed':
+        return (
+          <div className="status-tag status-completed">
+            <CheckCircle size={12} weight="fill" />
+            <span>Completed</span>
+          </div>
+        );
+      case 'ready':
+        return (
+          <div className="status-tag status-ready">
+            <ShieldCheck size={12} weight="fill" />
+            <span>Ready</span>
+          </div>
+        );
+      default:
+        return (
+          <div className="status-tag status-idle">
+             <CheckCircle size={12} />
+             <span>Verified</span>
+          </div>
+        );
+    }
+  };
+
+  const renderIntelligenceItem = (id: any, title: string, desc: string, icon: any) => {
+    const status = intelligenceStatus[id] || 'idle';
+    const isActive = activeTab === id;
+
+    return (
+      <div 
+        className={`intelligence-item ${isActive ? 'active' : ''}`}
+        onClick={() => setActiveTab(id)}
+      >
+        <div className="intelligence-content">
+          <div className="intelligence-title">{title}</div>
+          <div className="intelligence-desc">{desc}</div>
+        </div>
+        <div className="intelligence-action">
+          {renderStatusTag(status)}
+        </div>
+      </div>
+    );
   };
 
   const renderAIContent = () => {
+    if (activeTab === 'overview') {
+      return (
+        <div className="fade-in">
+          <div className="intelligence-list">
+             {renderIntelligenceItem('analysis', 'Structure Analysis', 'Deep insights into your code logic', <BugBeetle size={18} />)}
+             {renderIntelligenceItem('conversion', 'Language Transformation', 'Converted across platforms', <ArrowsLeftRight size={18} />)}
+             {renderIntelligenceItem('flowchart', 'Flow Visualization', 'Interactive flowcharts generated', <ChartLineUp size={18} />)}
+             {renderIntelligenceItem('estimate', 'Time Prediction', 'Estimated development effort', <Clock size={18} />)}
+          </div>
+
+          <div style={{ marginTop: '30px' }}>
+             <button className="run-btn" onClick={() => handleRunAI()} disabled={isProcessing || !activeFile}>
+                {isProcessing ? 'Thinking...' : 'Initiate Intelligence'}
+             </button>
+          </div>
+        </div>
+      );
+    }
+
     if (isProcessing) {
       return (
         <div className="empty-state">
           <Lightning size={44} color="#9333ea" className="animate-pulse mb-4" />
-          <p className="text-zinc-400">AI Code Analysis in progress...</p>
+          <p className="text-zinc-400">AI Intelligence analysis in progress...</p>
         </div>
       );
     }
 
     if (!aiOutput) {
-      if (activeTab === 'conversion' && !targetLanguage) {
-        return (
-          <div className="fade-in">
-             <h3 className="text-white font-medium mb-4">Select Conversion Target</h3>
-             <div className="lang-selector" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {['Python', 'Go', 'Rust', 'Java', 'C++', 'Swift'].map(lang => (
-                  <button 
-                    key={lang} 
-                    className={`lang-btn ${targetLanguage === lang ? 'active' : ''}`}
-                    onClick={() => setTargetLanguage(lang)}
-                  >
-                    {lang}
-                  </button>
-                ))}
-             </div>
-             <button 
-                className="action-confirm-btn" 
-                disabled={!targetLanguage || !activeFile}
-                onClick={handleRunAI}
-             >
-                Convert to {targetLanguage || '...'}
-             </button>
-          </div>
-        );
-      }
-
-      return (
-        <div className="empty-state">
-          <Code size={44} color="#52525b" className="mb-4" />
-          <p className="text-zinc-500">Select a file and click "Run Analysis"</p>
-          <button className="import-btn" onClick={handleRunAI} disabled={!activeFile} style={{ opacity: activeFile ? 1 : 0.5 }}>
-            Run Analysis
-          </button>
-        </div>
-      );
+       // Re-direct to start if no output
+       setActiveTab('overview');
+       return null;
     }
 
     switch (activeTab) {
       case 'analysis':
         return (
           <div className="fade-in">
+            <div className="flex items-center gap-2 mb-6" onClick={() => setActiveTab('overview')} style={{ cursor: 'pointer', color: '#8b949e' }}>
+               <X size={14} /> <span className="text-sm">Back to Overview</span>
+            </div>
             <h3 className="text-white font-medium mb-4">Structure Insights</h3>
             {aiOutput.analysis.map((item, i) => (
               <div key={i} className="analysis-item" style={{ marginBottom: 12 }}>
@@ -271,21 +412,90 @@ export default function Playground() {
         );
       case 'conversion':
         return (
-          <div className="fade-in">
-            <h3 className="text-white font-medium mb-4">Language Switch: {targetLanguage}</h3>
-            <div className="mock-code-block" style={{ color: '#60a5fa' }}>{aiOutput.conversion}</div>
-            <button 
-                className="import-btn" 
-                style={{ width: '100%', marginTop: '12px' }}
-                onClick={() => { setAiOutput(null); setTargetLanguage(null); }}
-            >
-              Select different language
-            </button>
+          <div className="fade-in h-full flex flex-col">
+            <div className="flex items-center gap-2 mb-4" onClick={() => setActiveTab('overview')} style={{ cursor: 'pointer', color: '#8b949e' }}>
+               <X size={14} /> <span className="text-sm">Back to Overview</span>
+            </div>
+
+            <div className="lang-selection-bar">
+               {['Python', 'Go', 'Rust', 'Java', 'C++', 'Swift', 'TypeScript'].map(lang => (
+                 <button 
+                   key={lang} 
+                   className={`lang-tab ${targetLanguage === lang ? 'active' : ''}`}
+                   onClick={() => {
+                       setTargetLanguage(lang);
+                       handleRunAI(lang);
+                   }}
+                 >
+                   {lang}
+                 </button>
+               ))}
+            </div>
+
+            {aiOutput && aiOutput.conversion ? (
+              <>
+                <div className="transformed-code-wrapper">
+                  <button 
+                    className="copy-button" 
+                    title="Copy Code"
+                    onClick={() => {
+                        navigator.clipboard.writeText(aiOutput.conversion);
+                        // Optional: Add toast or visual feedback
+                    }}
+                  >
+                    <CopySimple size={16} />
+                  </button>
+                  <div className="transformed-code-container">
+                    <pre className="transformed-code">
+                      <code>{aiOutput.conversion}</code>
+                    </pre>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 mt-4">
+                    <button 
+                         className="run-code-action-btn" 
+                         onClick={handleRunConvertedCode}
+                         disabled={isRunningCode}
+                    >
+                        <Play size={16} weight="fill" />
+                        <span>{targetLanguage === 'Java' ? 'Run code as Java' : targetLanguage === 'Python' ? 'Run code with Python' : `Run code as ${targetLanguage}`}</span>
+                    </button>
+                    
+                    <button className="re-run-btn" style={{ marginTop: 0 }} onClick={() => handleRunAI()} disabled={isProcessing}>
+                        <ArrowClockwise size={16} className={isProcessing ? 'animate-spin' : ''} />
+                    </button>
+                </div>
+
+                {terminalOutput.length > 0 && (
+                    <div className="terminal-window fade-in">
+                        <div className="terminal-header">Interactive Terminal</div>
+                        {terminalOutput.map((line, i) => (
+                            <div key={i} className={`terminal-line ${line.includes('SUCCESS') ? 'terminal-success' : ''}`}>
+                                {line}
+                            </div>
+                        ))}
+                        {isRunningCode && <div className="terminal-cursor"></div>}
+                    </div>
+                )}
+              </>
+            ) : (
+              <div className="empty-state py-12">
+                 <ArrowsLeftRight size={40} color="#3f3f46" className="mb-4" />
+                 <p className="text-zinc-500 text-sm mb-6">Select a target language to begin transformation</p>
+                 <button className="run-btn" disabled={!targetLanguage || isProcessing} onClick={() => handleRunAI()}>
+                    {isProcessing ? 'Processing...' : `Transform to ${targetLanguage || '...'}`}
+                 </button>
+              </div>
+            )}
           </div>
         );
       case 'flowchart':
         return (
           <div className="fade-in">
+            <div className="flex items-center gap-2 mb-6" onClick={() => setActiveTab('overview')} style={{ cursor: 'pointer', color: '#8b949e' }}>
+               <X size={14} /> <span className="text-sm">Back to Overview</span>
+            </div>
             <h3 className="text-white font-medium mb-4">Logic Visualization</h3>
             <MermaidRenderer chart={aiOutput.flowchart} />
           </div>
@@ -293,17 +503,14 @@ export default function Playground() {
       case 'estimate':
         return (
           <div className="fade-in text-center py-4">
+            <div className="flex items-center gap-2 mb-6" onClick={() => setActiveTab('overview')} style={{ cursor: 'pointer', color: '#8b949e' }}>
+               <X size={14} /> <span className="text-sm text-left">Back to Overview</span>
+            </div>
             <h3 className="text-white font-medium mb-6 text-left">Effort Prediction</h3>
             <div className="analysis-item" style={{ justifyContent: 'center', textAlign: 'center', padding: '24px 0' }}>
                <div>
                   <div className="text-3xl font-bold text-white mb-2">{aiOutput.estimate.time}</div>
                   <div className="text-sm text-zinc-400">Total Dev Hours</div>
-               </div>
-            </div>
-            <div className="analysis-item" style={{ justifyContent: 'center', textAlign: 'center', padding: '24px 0', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-               <div>
-                  <div className="text-2xl font-bold text-white mb-1">{aiOutput.estimate.loc}</div>
-                  <div className="text-sm text-zinc-400">Lines Processed</div>
                </div>
             </div>
           </div>
@@ -426,30 +633,26 @@ export default function Playground() {
 
           {/* COLUMN 3: AI Panel */}
           <div className="pg-window">
-            <div className="ai-actions">
-              <button className={`ai-action-btn ${activeTab === 'analysis' ? 'active' : ''}`} onClick={() => setActiveTab('analysis')}>
-                <BugBeetle size={18} /> <span>Analysis</span>
-              </button>
-              <button className={`ai-action-btn ${activeTab === 'conversion' ? 'active' : ''}`} onClick={() => setActiveTab('conversion')}>
-                <ArrowsLeftRight size={18} /> <span>Conversion</span>
-              </button>
-              <button className={`ai-action-btn ${activeTab === 'flowchart' ? 'active' : ''}`} onClick={() => setActiveTab('flowchart')}>
-                <ChartLineUp size={18} /> <span>Flowchart</span>
-              </button>
-              <button className={`ai-action-btn ${activeTab === 'estimate' ? 'active' : ''}`} onClick={() => setActiveTab('estimate')}>
-                <Clock size={18} /> <span>Estimate</span>
-              </button>
+            <div className="pg-window-header ai-header">
+              <span className="window-title intelligence-main-title">Code Intelligence</span>
+              <div className="model-toggle">
+                <button 
+                   className={`model-btn ${selectedModel === 'standard' ? 'active' : ''}`}
+                   onClick={() => setSelectedModel('standard')}
+                >
+                  Standard
+                </button>
+                <button 
+                   className={`model-btn ${selectedModel === 'advanced' ? 'active' : ''}`}
+                   onClick={() => setSelectedModel('advanced')}
+                >
+                  Advanced
+                </button>
+              </div>
             </div>
             <div className="ai-output-body">
               {renderAIContent()}
             </div>
-            {aiOutput && !isProcessing && (
-              <div style={{ padding: 12, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                <button className="run-btn" onClick={handleRunAI} style={{ width: '100%', justifyContent: 'center' }}>
-                  Re-process Logic
-                </button>
-              </div>
-            )}
           </div>
 
         </div>

@@ -1,18 +1,41 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { User, SignOut, SignIn } from '@phosphor-icons/react';
 import './Navbar.css';
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
     };
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/';
+  };
 
   return (
     <nav className={`nav-container ${scrolled ? 'scrolled' : ''}`}>
@@ -23,14 +46,26 @@ export default function Navbar() {
           </Link>
           <div className="nav-links">
             <Link href="/" className="nav-link">Home</Link>
+            <Link href="/playground" className="nav-link">Playground</Link>
             <Link href="/about" className="nav-link">About</Link>
-            <Link href="/blog" className="nav-link">Blog</Link>
-            <Link href="/contact" className="nav-link">Contact</Link>
           </div>
           <div className="nav-actions">
-            <Link href="https://cal.com" className="btn-primary" style={{ padding: '8px 16px', fontSize: '0.875rem' }}>
-              Download
-            </Link>
+            {user ? (
+              <div className="user-profile-nav">
+                <div className="user-info">
+                  <User size={18} weight="bold" />
+                  <span>{user.email?.split('@')[0]}</span>
+                </div>
+                <button onClick={handleSignOut} className="btn-logout" title="Sign Out">
+                  <SignOut size={18} />
+                </button>
+              </div>
+            ) : (
+              <Link href="/login" className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <SignIn size={18} weight="bold" />
+                <span>Sign In</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
