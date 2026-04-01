@@ -5,9 +5,10 @@ import { useState } from 'react';
 export interface FileNode {
   name: string;
   kind: 'file' | 'directory';
-  handle: FileSystemHandle;
+  handle: FileSystemHandle | null;
   children?: FileNode[];
   relativePath: string;
+  content?: string;
 }
 
 interface FileTreeProps {

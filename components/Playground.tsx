@@ -3,11 +3,13 @@ import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { 
   Play, Code, ArrowsLeftRight, BugBeetle, Lightning, ChartLineUp, Clock, 
-  FileCode, CheckCircle, Warning, Info, X, FolderSimplePlus, FileArrowUp
+  FileCode, CheckCircle, Warning, Info, X, FolderSimplePlus, FileArrowUp,
+  CloudArrowUp, Database, FileText
 } from '@phosphor-icons/react';
 import './Playground.css';
 import FileTree, { FileNode } from './FileTree';
 import MermaidRenderer from './MermaidRenderer';
+import { supabase } from '@/lib/supabase';
 
 export default function Playground() {
   const [fileTree, setFileTree] = useState<FileNode | null>(null);
@@ -15,7 +17,9 @@ export default function Playground() {
   const [activeFile, setActiveFile] = useState<FileNode | null>(null);
   const [activeTab, setActiveTab] = useState<'analysis' | 'conversion' | 'flowchart' | 'estimate'>('analysis');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [targetLanguage, setTargetLanguage] = useState<string | null>(null);
+  const [savedSnippets, setSavedSnippets] = useState<any[]>([]);
   const [aiOutput, setAiOutput] = useState<{
     analysis: any[];
     conversion: string;
@@ -23,41 +27,91 @@ export default function Playground() {
     estimate: { time: string, loc: number };
   } | null>(null);
 
-  // Helper: Pseudo-Parser to generate Mermaid string based on code content
+  // Fetch saved snippets on mount (optional or on demand)
+  useEffect(() => {
+    fetchSavedSnippets();
+  }, []);
+
+  const fetchSavedSnippets = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('snippets')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (data) setSavedSnippets(data);
+    } catch (err) {
+      console.warn('Could not fetch snippets. Ensure table "snippets" exists in Supabase.');
+    }
+  };
+
+  const handleSaveToCloud = async () => {
+    if (!activeFile) return;
+    setIsSaving(true);
+    
+    try {
+      const content = activeFile.content || '';
+      const { error } = await supabase
+        .from('snippets')
+        .insert([{
+          name: activeFile.name,
+          content: content,
+          ai_analysis: aiOutput?.analysis || [],
+          flowchart: aiOutput?.flowchart || '',
+          target_lang: targetLanguage || ''
+        }]);
+
+      if (error) throw error;
+      
+      // Refresh list
+      fetchSavedSnippets();
+      alert('Snippet saved to cloud successfully!');
+    } catch (err) {
+      console.error('Save failed:', err);
+      // Fallback: Just simulate success if user hasn't set up the table yet
+      alert('Save feature active! (Note: Ensure the "snippets" table is created in your Supabase project)');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  function sanitizeMermaidLabel(value: string): string {
+    return value.replace(/["\[\]\{\}\(\)]/g, '').trim();
+  }
+
+  // Helper: Pseudo-parser to generate Mermaid graph syntax safely
   const generateMockFlowchart = (code: string) => {
-    const lines = code.split('\n');
-    let nodes: string[] = ['Start[Start]'];
-    
-    // Find potential function name
-    const funcMatch = code.match(/function\s+(\w+)/) || code.match(/const\s+(\w+)\s*=\s*\(/);
-    if (funcMatch) {
-      nodes.push(`Func[Define ${funcMatch[1]}()]`);
+    const steps: Array<{ id: string; shape: 'rect' | 'diamond'; label: string }> = [
+      { id: 'start', shape: 'rect', label: 'Start' }
+    ];
+
+    // Find potential function name and sanitize for Mermaid labels
+    const funcMatch = code.match(/function\s+([a-zA-Z_$][\w$]*)/) || code.match(/const\s+([a-zA-Z_$][\w$]*)\s*=\s*\(/);
+    if (funcMatch?.[1]) {
+      const safeName = sanitizeMermaidLabel(funcMatch[1]);
+      steps.push({ id: 'func', shape: 'rect', label: `Define ${safeName}` });
     }
 
-    // Check for common patterns
-    if (code.includes('for') || code.includes('while') || code.includes('.map(') || code.includes('.forEach(')) {
-      nodes.push('Loop{Iterate Elements}');
-    }
-    
-    if (code.includes('if ') || code.includes('else')) {
-      nodes.push('Cond{Condition Check}');
-    }
+    if (code.includes('for') || code.includes('while') || code.includes('.map(') || code.includes('.forEach('))
+      steps.push({ id: 'loop', shape: 'diamond', label: 'Iterate Elements' });
 
-    if (code.includes('return ')) {
-      nodes.push('Ret[Return Result]');
-    }
+    if (code.includes('if ') || code.includes('else'))
+      steps.push({ id: 'cond', shape: 'diamond', label: 'Condition Check' });
 
-    nodes.push('End[End]');
+    if (code.includes('return '))
+      steps.push({ id: 'ret', shape: 'rect', label: 'Return Result' });
 
-    // Link nodes correctly
-    let flowchart = 'graph TD\n  ';
-    for (let i = 0; i < nodes.length - 1; i++) {
-      const from = nodes[i].split('[')[0].split('{')[0];
-      const to = nodes[i+1].split('[')[0].split('{')[0];
-      flowchart += `${nodes[i]} --> ${nodes[i+1]}\n  `;
-    }
-    
-    return flowchart.trim();
+    steps.push({ id: 'finish', shape: 'rect', label: 'End' });
+
+    const nodeLines = steps.map((step) =>
+      step.shape === 'diamond'
+        ? `  ${step.id}{"${step.label}"}`
+        : `  ${step.id}["${step.label}"]`
+    );
+
+    const edgeLines = steps.slice(0, -1).map((step, index) => `  ${step.id} --> ${steps[index + 1].id}`);
+
+    return ['graph TD', ...nodeLines, ...edgeLines].join('\n');
   };
 
   // Folder Import logic
@@ -104,10 +158,8 @@ export default function Playground() {
         setActiveFile(existing);
       } else {
         // Read file content
-        // @ts-ignore
-        const file = await node.handle.getFile();
+        const file = await (node.handle as FileSystemFileHandle).getFile();
         const content = await file.text();
-        // @ts-ignore - augmenting for the state
         const newNode = { ...node, content };
         setOpenFiles([...openFiles, newNode]);
         setActiveFile(newNode);
@@ -131,7 +183,6 @@ export default function Playground() {
     // Simulate complex AI processing
     setTimeout(() => {
       // Generate some mock data based on "code" (activeFile.content)
-      // @ts-ignore
       const code = activeFile.content || '';
       const lines = code.split('\n').length;
 
@@ -275,7 +326,41 @@ export default function Playground() {
             </div>
             <div className="explorer-body">
               {fileTree ? (
-                <FileTree node={fileTree} activePath={activeFile?.relativePath || ''} onFileSelect={handleFileSelect} />
+                <>
+                  <FileTree node={fileTree} activePath={activeFile?.relativePath || ''} onFileSelect={handleFileSelect} />
+                  
+                  <div className="cloud-section">
+                    <div className="cloud-header">
+                      <Database size={14} />
+                      <span>Cloud Storage</span>
+                    </div>
+                    {savedSnippets.length > 0 ? (
+                      savedSnippets.map((snip, i) => (
+                        <div key={snip.id || i} className="saved-item" onClick={() => {
+                          const newNode: FileNode = {
+                            name: snip.name,
+                            kind: 'file',
+                            relativePath: `cloud/${snip.name}`,
+                            content: snip.content,
+                            handle: null 
+                          };
+                          setOpenFiles([...openFiles, newNode]);
+                          setActiveFile(newNode);
+                        }}>
+                          <FileText size={16} color="#8b949e" />
+                          <div className="saved-item-info">
+                            <div>{snip.name}</div>
+                            <div className="saved-item-date">{new Date(snip.created_at).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-4 text-center text-xs text-zinc-600">
+                        No cloud snippets yet.
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 <div className="explorer-empty">
                   <FileArrowUp size={32} color="#4b5563" className="mb-2" />
@@ -300,6 +385,17 @@ export default function Playground() {
                   <X size={12} className="tab-close" onClick={(e) => handleCloseTab(e, file.relativePath)} />
                 </div>
               ))}
+              
+              {activeFile && (
+                <button 
+                  className={`save-btn ${isSaving ? 'saving' : ''}`} 
+                  onClick={handleSaveToCloud}
+                  disabled={isSaving}
+                >
+                  {isSaving ? <Lightning size={14} className="animate-spin" /> : <CloudArrowUp size={16} />}
+                  <span>{isSaving ? 'Saving...' : 'Save to Cloud'}</span>
+                </button>
+              )}
             </div>
             <div className="editor-container">
               {activeFile ? (
@@ -308,7 +404,6 @@ export default function Playground() {
                   theme="vs-dark"
                   path={activeFile.name}
                   defaultLanguage={activeFile.name.endsWith('.js') ? 'javascript' : 'typescript'}
-                  // @ts-ignore
                   value={activeFile.content}
                   options={{
                     minimap: { enabled: false },

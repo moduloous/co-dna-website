@@ -277,5 +277,80 @@
   transform: none;
 }
 
+/* Save Button & Database Sync */
+.save-btn {
+  background: rgba(147, 51, 234, 0.15);
+  border: 1px solid rgba(147, 51, 234, 0.3);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+.save-btn:hover {
+  background: rgba(147, 51, 234, 0.25);
+  border-color: var(--accent-purple);
+}
+
+.save-btn.saving {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Sidebar Cloud Section */
+.cloud-section {
+  margin-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 16px;
+}
+
+.cloud-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding: 0 8px;
+}
+
+.saved-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #c9d1d9;
+  font-size: 0.8rem;
+  transition: background 0.2s;
+}
+
+.saved-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.saved-item-info {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-item-date {
+  font-size: 0.65rem;
+  color: #484f58;
+}
+
 
 
