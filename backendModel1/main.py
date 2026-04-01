@@ -60,7 +60,7 @@ BEDROCK_MODEL_ID = 'amazon.nova-lite-v1:0'
 
 from typing import Optional
 
-
+#Bedrock CModel initialization
 def get_bedrock():
     if bedrock_client is None:
         raise HTTPException(
