@@ -5,48 +5,50 @@ import './Pricing.css';
 
 const plans = [
   {
-    name: "Starter",
-    price: "$37",
-    period: "/month",
-    desc: "Perfect for small businesses starting with AI automation.",
+    name: "BASIC (Free Plan)",
+    price: "Free",
+    period: "",
+    desc: "12 credits/month (1 request = 1–3 credits)",
     features: [
-      "Basic workflow automation",
-      "AI-powered personal assistant",
-      "Standard analytics & reporting",
-      "Email & chat support",
-      "Up to 3 AI integrations"
+      "Code explanation",
+      "Basic code analysis",
+      "Limited code conversion",
+      "Technical debt score"
     ],
-    cta: "Choose this plan",
+    cta: "Start for free",
     popular: false
   },
   {
-    name: "Professional",
-    price: "$75",
+    name: "ADVANCED",
+    price: "₹1,999",
     period: "/month",
-    desc: "Perfect for fast growing businesses scaling AI automation.",
+    desc: "500–1000 credits/month",
     features: [
-      "Advanced workflow automation",
-      "AI-driven sales & marketing tools",
-      "Enhanced data analytics & insights",
-      "Priority customer support",
-      "Up to 10 AI integrations"
+      "Everything in Free +",
+      "Full code conversion (multi-language)",
+      "Code modernization",
+      "Flowcharts (BIG differentiator)",
+      "Faster AI model",
+      "Priority processing",
+      "API access (limited)"
     ],
-    cta: "Choose this plan",
+    cta: "Upgrade to Advanced",
     popular: true
   },
   {
-    name: "Enterprise",
+    name: "ENTERPRISE",
     price: "Custom",
     period: "",
-    desc: "Perfect for large businesses looking for custom AI solutions.",
+    desc: "(customizable) | Unlimited usage",
     features: [
-      "Fully customizable AI automation",
-      "Dedicated AI business consultant",
-      "Enterprise-grade compliance",
-      "24/7 VIP support",
-      "Unlimited AI integrations"
+      "Everything in Advanced +",
+      "Full repo analysis",
+      "GitHub integration",
+      "Team dashboard",
+      "Private deployment",
+      "Dedicated support"
     ],
-    cta: "Schedule a call",
+    cta: "Contact Sales",
     popular: false
   }
 ];
@@ -59,8 +61,8 @@ export default function Pricing() {
       <div className="container">
         <div className="pricing-header">
           <span className="pill" style={{ marginBottom: '1rem', background: '#9333ea20', color: '#d8b4fe', borderColor: '#9333ea50' }}>Pricing</span>
-          <h2>The Best AI Automation, at the Right Price</h2>
-          <p style={{ maxWidth: '600px', margin: '1rem auto 0' }}>Choose a plan that fits your business needs and start automating with AI</p>
+          <h2>Powerful AI for Your Code, at the Right Price</h2>
+          <p style={{ maxWidth: '600px', margin: '1rem auto 0' }}>Choose a plan that helps you understand, improve, and scale your code faster.</p>
           
           <div className="billing-toggle">
             <button 

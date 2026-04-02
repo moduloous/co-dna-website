@@ -33,7 +33,7 @@ export default function FileTree({ node, activePath, onFileSelect, level = 0 }: 
   const isSelected = activePath === node.relativePath;
 
   return (
-    <div style={{ marginLeft: level > 0 ? 12 : 0 }}>
+    <div style={{ marginLeft: level > 0 ? 20 : 0, fontFamily: 'Figtree, sans-serif' }}>
       <div 
         className={`tree-node ${isSelected ? 'active' : ''}`}
         onClick={handleToggle}

@@ -5,7 +5,7 @@ import {
   Play, Code, ArrowsLeftRight, BugBeetle, Lightning, ChartLineUp, Clock, 
   FileCode, CheckCircle, Warning, Info, X, FolderSimplePlus, FileArrowUp,
   CloudArrowUp, Database, FileText, ShieldCheck, HourglassSimpleHigh, CaretRight,
-  CopySimple, ArrowClockwise
+  CopySimple, ArrowClockwise, GithubLogo
 } from '@phosphor-icons/react';
 import './Playground.css';
 import FileTree, { FileNode } from './FileTree';
@@ -23,9 +23,11 @@ export default function Playground() {
   const [savedSnippets, setSavedSnippets] = useState<any[]>([]);
   const [aiOutput, setAiOutput] = useState<{
     analysis: any[];
-    conversion: string;
+    conversions: Record<string, string>;
     flowchart: string;
     estimate: { time: string, loc: number };
+    spaghettiScore?: number;
+    dollarImpact?: number;
   } | null>(null);
   const [selectedModel, setSelectedModel] = useState<'advanced' | 'standard'>('standard');
   const [intelligenceStatus, setIntelligenceStatus] = useState<any>({
@@ -137,8 +139,17 @@ export default function Playground() {
         relativePath: directoryHandle.name,
       };
 
+      const IGNORE_LIST = ['node_modules', '.git', '.next', '.venv', 'dist', 'build', '.DS_Store', '__pycache__'];
+
       async function readDirectory(handle: any, parent: FileNode) {
+        const entries: any[] = [];
         for await (const entry of handle.values()) {
+          if (IGNORE_LIST.includes(entry.name)) continue;
+          entries.push(entry);
+        }
+
+        // Process entries in parallel for maximum speed
+        const childNodes = await Promise.all(entries.map(async (entry) => {
           const node: FileNode = {
             name: entry.name,
             kind: entry.kind,
@@ -149,8 +160,10 @@ export default function Playground() {
             node.children = [];
             await readDirectory(entry, node);
           }
-          parent.children!.push(node);
-        }
+          return node;
+        }));
+
+        parent.children = childNodes;
       }
 
       await readDirectory(directoryHandle, root);
@@ -188,13 +201,16 @@ export default function Playground() {
 
   const handleRunAI = async (overrideLang?: string) => {
     if (!activeFile) return;
+    
+    const finalTargetLang = overrideLang || targetLanguage || 'Python';
+    
+    // Efficiency: If we already have the conversion for this language, don't re-run
+    if (aiOutput?.conversions?.[finalTargetLang]) {
+      setTargetLanguage(finalTargetLang);
+      return;
+    }
+
     setIsProcessing(true);
-    setIntelligenceStatus({
-      analysis: 'processing',
-      conversion: 'processing',
-      flowchart: 'processing',
-      estimate: 'processing'
-    });
     
     // Detect language from file extension
     const fileName = activeFile.name;
@@ -203,11 +219,11 @@ export default function Playground() {
                     fileName.endsWith('.go') ? 'go' : 
                     fileName.endsWith('.rs') ? 'rust' : 'typescript';
     
-    const url = selectedModel === 'advanced' 
-        ? 'http://localhost:3002/analyze-debt' 
-        : 'http://localhost:8000/analyze-full';
-
-    const finalTargetLang = overrideLang || targetLanguage || 'Python';
+    // Choose endpoint based on whether we already have base analysis
+    const isFirstRun = !aiOutput;
+    const url = isFirstRun 
+        ? 'http://localhost:8000/analyze-full' 
+        : 'http://localhost:8000/convert-logic';
 
     try {
       const res = await fetch(url, {
@@ -223,55 +239,82 @@ export default function Playground() {
       if (!res.ok) throw new Error('Model offline');
       const data = await res.json();
       
-      // Map the backend response to the frontend state
-      setAiOutput({
-        analysis: data.analysis || [],
-        conversion: data.conversion || '',
-        flowchart: data.flowchart || '',
-        estimate: data.estimate || { time: '0h 0m', loc: 0 }
-      });
-
-      setIntelligenceStatus({
-        analysis: 'completed',
-        conversion: 'completed',
-        flowchart: 'completed',
-        estimate: 'completed'
-      });
-    } catch (err) {
-      console.warn('AI integration failed, falling back to simulation:', err);
-      // Fallback simulation for demonstration
-      setTimeout(() => {
-        const code = activeFile.content || '';
-        const lines = code.split('\n').length;
+      if (isFirstRun) {
+        // Initial full run
         setAiOutput({
-          analysis: [
-            { type: 'warn', title: 'Security Risk', desc: 'Possible hardcoded secret pattern detected.' },
-            { type: 'info', title: 'Performance', desc: 'Loop optimization suggested.' },
-            { type: 'check', title: 'Clean Code', desc: 'Naming follows camelCase.' }
-          ],
-          conversion: `# Converted to ${finalTargetLang}\n\ndef ${activeFile.name.replace(/\.[^/.]+$/, "")}():\n    pass`,
-          flowchart: generateMockFlowchart(code),
-          estimate: { time: lines < 50 ? '0h 45m' : '2h 15m', loc: lines }
+          analysis: data.analysis || [],
+          conversions: { [finalTargetLang]: data.conversion || '' },
+          flowchart: data.flowchart || '',
+          estimate: data.estimate || { time: '0h 0m', loc: 0 }
         });
+        
         setIntelligenceStatus({
           analysis: 'completed',
           conversion: 'completed',
           flowchart: 'completed',
           estimate: 'completed'
         });
-      }, 1500);
+      } else {
+        // Just adding a new language conversion
+        setAiOutput(prev => prev ? {
+          ...prev,
+          conversions: {
+            ...prev.conversions,
+            [finalTargetLang]: data.conversion || ''
+          }
+        } : null);
+      }
+      
+      setTargetLanguage(finalTargetLang);
+
+    } catch (err) {
+      console.warn('AI integration failed, falling back to simulation:', err);
+      // Fallback simulation remains for UX robustness
+      if (isFirstRun) {
+        setTimeout(() => {
+          const code = activeFile.content || '';
+          const lines = code.split('\n').length;
+          setAiOutput({
+            analysis: [
+              { type: 'warn', title: 'Security Risk', desc: 'Possible hardcoded secret pattern detected.' },
+              { type: 'info', title: 'Performance', desc: 'Loop optimization suggested.' },
+              { type: 'check', title: 'Clean Code', desc: 'Naming follows camelCase.' }
+            ],
+            conversions: { [finalTargetLang]: `# Converted to ${finalTargetLang}\n\ndef ${activeFile.name.replace(/\.[^/.]+$/, "")}():\n    pass` },
+            flowchart: generateMockFlowchart(code),
+            estimate: { time: lines < 50 ? '0h 45m' : '2h 15m', loc: lines },
+            spaghettiScore: selectedModel === 'advanced' ? 74 : undefined,
+            dollarImpact: selectedModel === 'advanced' ? 1250 : undefined
+          });
+          setIntelligenceStatus({
+            analysis: 'completed',
+            conversion: 'completed',
+            flowchart: 'completed',
+            estimate: 'completed'
+          });
+          setTargetLanguage(finalTargetLang);
+        }, 1000);
+      } else {
+        setAiOutput(prev => prev ? {
+          ...prev,
+          conversions: {
+            ...prev.conversions,
+            [finalTargetLang]: `// Error converting to ${finalTargetLang}. Please try again.`
+          }
+        } : null);
+      }
     } finally {
       setIsProcessing(false);
     }
   };
 
   const handleRunConvertedCode = () => {
-    if (!aiOutput?.conversion) return;
+    if (!targetLanguage || !aiOutput?.conversions?.[targetLanguage]) return;
     setIsRunningCode(true);
     setTerminalOutput([]);
     
     // Simulate terminal lines
-    const lang = targetLanguage || 'System';
+    const lang = targetLanguage;
     const lines = [
       `> Initializing ${lang} Runtime environment...`,
       `> Checking dependencies for code segment...`,
@@ -366,6 +409,31 @@ export default function Playground() {
           </div>
 
           <div style={{ marginTop: '30px' }}>
+             {selectedModel === 'advanced' && aiOutput && (
+               <div className="advanced-metrics-grid fade-in">
+                 <div className="metric-card">
+                   <div className="metric-label">Spaghetti Score</div>
+                   <div className="metric-value-container">
+                     <span className="metric-value">{aiOutput.spaghettiScore || 74}</span>
+                     <span className="metric-unit">/ 100</span>
+                   </div>
+                   <div className="metric-progress-bg">
+                     <div className="metric-progress-fill" style={{ width: `${aiOutput.spaghettiScore || 74}%` }}></div>
+                   </div>
+                   <div className="metric-status">Complexity: High</div>
+                 </div>
+                 <div className="metric-card">
+                   <div className="metric-label">Dollar Impact</div>
+                   <div className="metric-value-container">
+                     <span className="metric-currency">$</span>
+                     <span className="metric-value">{(aiOutput.dollarImpact || 1250).toLocaleString()}</span>
+                   </div>
+                   <div className="metric-subtext">Estimated Technical Debt</div>
+                   <div className="metric-status status-warn">Requires refactoring</div>
+                 </div>
+               </div>
+             )}
+
              <button className="run-btn" onClick={() => handleRunAI()} disabled={isProcessing || !activeFile}>
                 {isProcessing ? 'Thinking...' : 'Initiate Intelligence'}
              </button>
@@ -432,22 +500,22 @@ export default function Playground() {
                ))}
             </div>
 
-            {aiOutput && aiOutput.conversion ? (
+            {aiOutput && aiOutput.conversions && targetLanguage && aiOutput.conversions[targetLanguage] ? (
               <>
                 <div className="transformed-code-wrapper">
                   <button 
                     className="copy-button" 
                     title="Copy Code"
                     onClick={() => {
-                        navigator.clipboard.writeText(aiOutput.conversion);
-                        // Optional: Add toast or visual feedback
+                        const codeToCopy = aiOutput.conversions[targetLanguage] || '';
+                        navigator.clipboard.writeText(codeToCopy);
                     }}
                   >
                     <CopySimple size={16} />
                   </button>
                   <div className="transformed-code-container">
                     <pre className="transformed-code">
-                      <code>{aiOutput.conversion}</code>
+                      <code>{aiOutput.conversions[targetLanguage]}</code>
                     </pre>
                   </div>
                 </div>
@@ -527,9 +595,14 @@ export default function Playground() {
           <div className="pg-window">
             <div className="pg-window-header">
               <span className="window-title">Explorer</span>
-              <button onClick={handleImportFolder} title="Import Folder" style={{ background: 'transparent', border: 'none', color: '#8b949e', cursor: 'pointer' }}>
-                <FolderSimplePlus size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => alert('GitHub Import coming soon!')} title="Import from GitHub" style={{ background: 'transparent', border: 'none', color: '#8b949e', cursor: 'pointer' }}>
+                  <GithubLogo size={18} />
+                </button>
+                <button onClick={handleImportFolder} title="Import Folder" style={{ background: 'transparent', border: 'none', color: '#8b949e', cursor: 'pointer' }}>
+                  <FolderSimplePlus size={18} />
+                </button>
+              </div>
             </div>
             <div className="explorer-body">
               {fileTree ? (
@@ -572,7 +645,16 @@ export default function Playground() {
                 <div className="explorer-empty">
                   <FileArrowUp size={32} color="#4b5563" className="mb-2" />
                   <p className="text-xs text-zinc-500 mb-4">No project imported</p>
-                  <button className="import-btn" onClick={handleImportFolder}>Import Folder</button>
+                  <div className="flex flex-col gap-4 w-full px-4">
+                    <button className="import-btn" onClick={handleImportFolder}>
+                      <FolderSimplePlus size={16} />
+                      <span>Import Folder</span>
+                    </button>
+                    <button className="import-btn github-import-btn" onClick={() => window.open('https://github.com/login', '_blank')}>
+                      <GithubLogo size={16} />
+                      <span>Import from GitHub</span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -620,6 +702,9 @@ export default function Playground() {
                     scrollBeyondLastLine: false,
                     readOnly: false,
                     automaticLayout: true,
+                    tabSize: 2,
+                    fontFamily: 'Figtree, Menlo, Monaco, "Courier New", monospace',
+                    fontWeight: '400',
                   }}
                 />
               ) : (

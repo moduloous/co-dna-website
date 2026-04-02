@@ -5,24 +5,34 @@ import './Testimonials.css';
 
 const testimonials = [
   {
-    quote: "AI automation transformed our operations by eliminating repetitive tasks and improving efficiency. Scaling our workflow has never been easier!",
-    name: "James Carter",
-    title: "CEO at TechFlow Solutions"
+    quote: "Code DNA helped us instantly understand legacy code that used to take hours. The technical debt analysis alone saved our team weeks of refactoring time.",
+    name: "Arjun Mehta",
+    title: "CTO at DevScale Labs"
   },
   {
-    quote: "With AI, we cut manual work and improved accuracy. Our team now focuses on high-impact tasks while automation handles the rest!",
-    name: "Sophia Martinez",
-    title: "Operations Manager at NexaCorp"
+    quote: "The code conversion feature is insane. We migrated parts of our backend from JavaScript to Python in minutes instead of days.",
+    name: "Rohit Sharma",
+    title: "Full Stack Developer at StackForge"
   },
   {
-    quote: "AI-driven insights doubled our sales efficiency. We now engage leads at the right time with smarter, data-backed decisions!",
-    name: "David Reynolds",
-    title: "Head of Sales at GrowthPeak"
+    quote: "The technical debt score gave us clarity on what actually needed fixing. Instead of guessing, we now prioritize based on real impact.",
+    name: "Neha Kapoor",
+    title: "Software Engineer at CodeCraft"
   },
   {
-    quote: "Customer support is now seamless. Our response time improved drastically, and satisfaction levels are at an all-time high, thanks to CODE-DNA",
-    name: "Emily Wong",
-    title: "Customer Success Lead at SupportHive"
+    quote: "Flowcharts from code? That’s a game changer. It made onboarding new developers 10x faster in our team.",
+    name: "Karan Verma",
+    title: "Engineering Lead at BuildX"
+  },
+  {
+    quote: "Code DNA feels like having a senior engineer reviewing your code 24/7. It catches issues, explains logic, and even modernizes outdated code.",
+    name: "Aditya Singh",
+    title: "Backend Developer at Nexa Systems"
+  },
+  {
+    quote: "We used Code DNA to analyze our entire module before release. It reduced bugs significantly and improved our deployment confidence.",
+    name: "Priya Nair",
+    title: "Product Engineer at LaunchPad Tech"
   }
 ];
 
@@ -63,8 +73,8 @@ export default function Testimonials() {
       <div className="container">
         <div className="testimonials-header">
           <span className="pill" style={{ marginBottom: '1rem', background: '#9333ea20', color: '#d8b4fe', borderColor: '#9333ea50' }}>Testimonials</span>
-          <h2>Why Businesses Love Our AI Solutions</h2>
-          <p style={{ maxWidth: '600px', margin: '1rem auto 0' }}>Real businesses, real results with AI automation.</p>
+          <h2>Why Developers Love Code DNA</h2>
+          <p style={{ maxWidth: '600px', margin: '1rem auto 0' }}>Real code, real insights, real improvements powered by AI.</p>
         </div>
       </div>
       

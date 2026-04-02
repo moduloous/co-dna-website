@@ -52,10 +52,10 @@ export default function Navbar() {
           <div className="nav-actions">
             {user ? (
               <div className="user-profile-nav">
-                <div className="user-info">
+                <Link href="/dashboard" className="user-info hover:text-purple-400 transition-colors">
                   <User size={18} weight="bold" />
                   <span>{user.email?.split('@')[0]}</span>
-                </div>
+                </Link>
                 <button onClick={handleSignOut} className="btn-logout" title="Sign Out">
                   <SignOut size={18} />
                 </button>

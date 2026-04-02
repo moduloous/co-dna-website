@@ -258,3 +258,47 @@ def modernize_code(payload: CodePayload):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==========================================
+# ENDPOINT 4: CONVERT LOGIC (LIGHTWEIGHT)
+# ==========================================
+@app.post("/convert-logic")
+def convert_logic(payload: CodePayload):
+    target = payload.targetLanguage if payload.targetLanguage else "Python"
+    
+    system_prompt = f"""
+    You are an expert developer. Convert the provided code from {payload.language} into {target}.
+    The conversion MUST be perfectly valid {target} syntax and functionally identical to the source.
+    CRITICAL: Respond ONLY with the raw converted code. No markdown, no comments, no intro/outro.
+    """
+    
+    try:
+        response = get_bedrock().converse(
+            modelId=BEDROCK_MODEL_ID,
+            system=[{"text": system_prompt}],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [{"text": f"Convert this {payload.language} code to {target}:\n\n{payload.code}"}]
+                }
+            ],
+            inferenceConfig={
+                "maxTokens": 2000,
+                "temperature": 0.1
+            }
+        )
+        
+        nova_output = response['output']['message']['content'][0]['text']
+        # Strip markdown if any
+        clean_code = nova_output.replace('```', '').strip()
+        # Sometimes Nova adds the language name at the start
+        if clean_code.lower().startswith(target.lower()):
+            clean_code = clean_code[len(target):].strip()
+            
+        return {"conversion": clean_code}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
